@@ -4,6 +4,9 @@
  *
  * Listens for Stripe checkout.session.completed events and
  * updates the Supabase pipeline state accordingly.
+ *
+ * Uses session.metadata.payment_type to distinguish
+ * between 'deposit' and 'remaining_balance' payments.
  */
 
 // ─── Configuration ──────────────────────────────────────────────
@@ -13,9 +16,9 @@ const SUPABASE_URL = '';    // Set as secret
 const SUPABASE_KEY = '';    // Set as secret
 const STRIPE_SECRET = '';   // Set as secret
 
-// Stripe price IDs for your products
-const DEPOSIT_PRICE_ID = 'price_YOUR_DEPOSIT_PRICE_ID';
-const REMAINING_PRICE_ID = 'price_YOUR_REMAINING_PRICE_ID';
+// Products created via stripe-setup.js:
+// Deposit:  prod_UehjRocQ39lNRs
+// Remaining: prod_UehjCqAnClo4tE
 
 // ─── Main Handler ───────────────────────────────────────────────
 export default {
@@ -45,19 +48,21 @@ export default {
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object;
         const clientId = session.client_reference_id;
-        const priceId = session.line_items?.data[0]?.price?.id;
+        const paymentType = session.metadata?.payment_type;
 
         if (!clientId) {
           return new Response('Missing client_reference_id', { status: 400 });
         }
 
+        if (!paymentType || !['deposit', 'remaining_balance'].includes(paymentType)) {
+          return new Response('Unknown payment_type', { status: 200 }); // Ack Stripe
+        }
+
         let newStage;
-        if (priceId === DEPOSIT_PRICE_ID) {
+        if (paymentType === 'deposit') {
           newStage = 'DEPOSIT_PAID';
-        } else if (priceId === REMAINING_PRICE_ID) {
-          newStage = 'REMAINDER_PAID';
         } else {
-          return new Response('Unknown price ID', { status: 200 }); // Ack Stripe
+          newStage = 'REMAINDER_PAID';
         }
 
         // Update Supabase pipeline state
@@ -85,7 +90,6 @@ export default {
 
 // ─── Stripe Signature Verification ─────────────────────────────
 async function verifyStripeSignature(payload, signature, secret) {
-  // Simple HMAC-SHA256 verification
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw', encoder.encode(secret),
@@ -93,7 +97,6 @@ async function verifyStripeSignature(payload, signature, secret) {
     false, ['verify']
   );
 
-  // Stripe sends t=timestamp,v1=signature
   const parts = signature.split(',');
   const timestampPart = parts.find(p => p.startsWith('t='));
   const sigPart = parts.find(p => p.startsWith('v1='));
@@ -145,7 +148,6 @@ async function updatePipelineState(env, clientId, stage) {
 
 // ─── Trigger Hermes Build ──────────────────────────────────────
 async function triggerBuild(env, clientId) {
-  // Fetch the client's full pipeline record
   const endpoint = `${env.SUPABASE_URL}/rest/v1/pipeline_state?client_id=eq.${clientId}`;
   const response = await fetch(endpoint, {
     headers: {
@@ -158,13 +160,11 @@ async function triggerBuild(env, clientId) {
   const [record] = await response.json();
   if (!record) return;
 
-  // This endpoint tells Hermes to start the build workflow
-  // In practice, this could be a Hermes webhook or a GitHub Actions trigger
   console.log(`Build triggered for client ${clientId}: ${record.business_name}`);
-  // TODO: Implement actual Hermes build trigger (webhook or GitHub Actions dispatch)
+  // TODO: Call Hermes webhook or GitHub Actions dispatch
 }
 
-// ─── CORS for webhook access ────────────────────────────────────
+// ─── CORS ────────────────────────────────────────────────────────
 async function handleOptions(request) {
   return new Response(null, {
     headers: {
