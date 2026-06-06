@@ -1,119 +1,137 @@
--- BOOKISTUDIO Pipeline State Schema
--- Run this in your Supabase SQL Editor
--- Replace your-project-ref with your actual Supabase project ref
+-- BOOKISTUDIO — Extended Schema
+-- Run this in your Supabase SQL Editor (Project → SQL Editor → New query → Paste → Run).
+-- Extends the existing `public.inquiries` and `public.sites` tables with a
+-- `public.pipeline_state` table for full pipeline tracking.
 
--- ─── Pipeline State Table ───────────────────────────────────────
-CREATE TABLE IF NOT EXISTS pipeline_state (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id     UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-  business_name TEXT NOT NULL,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+-- ── Table: inquiries (already exists) ──
+-- This table already has: id, created_at, type, name, email, business, budget, read, data
+-- No changes needed — Hermes reads this to detect new submissions.
+
+-- ── Table: sites (already exists) ──
+-- This table already has: id, created_at, name, url, industry, description, image_data, active
+-- Hermes reads this for style reference and past work context.
+
+-- ── New Table: pipeline_state ──
+-- Tracks each client through the BOOKISTUDIO automation pipeline.
+create table if not exists public.pipeline_state (
+  id              uuid primary key default gen_random_uuid(),
+  inquiry_id      bigint references public.inquiries(id) on delete cascade,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
 
   -- Pipeline stage
-  stage         TEXT NOT NULL DEFAULT 'INQUIRY'
-                CHECK (stage IN (
-                  'INQUIRY',
-                  'INTAKE_SENT',
-                  'INTAKE_RECEIVED',
-                  'PLANNING',
-                  'PLAN_SENT',
-                  'AGREEMENT_SIGNED',
-                  'DEPOSIT_PAID',
-                  'BUILDING',
-                  'SITE_REVIEW',
-                  'SITE_APPROVED',
-                  'SITE_DELIVERED',
-                  'REMAINDER_PAID',
-                  'COMPLETE',
-                  'CANCELLED'
-                )),
+  stage           text not null default 'INQUIRY_RECEIVED' check (stage in (
+                    'INQUIRY_RECEIVED',
+                    'AM_REVIEW',
+                    'PLANNING',
+                    'PLAN_SENT',
+                    'AGREEMENT_SENT',
+                    'DEPOSIT_PAID',
+                    'BUILDING',
+                    'SITE_REVIEW',
+                    'SITE_APPROVED',
+                    'SITE_DELIVERED',
+                    'REMAINDER_PAID',
+                    'COMPLETE',
+                    'CANCELLED'
+                  )),
 
-  -- Client info
-  email         TEXT,
-  phone         TEXT,
-  location      TEXT,
-  industry      TEXT,
+  -- Client info (mirrored from inquiries for quick access)
+  business_name   text,
+  client_email    text,
+  client_phone    text,
 
-  -- Intake data (JSON — full intake analyzer output)
-  intake_data   JSONB,
+  -- Outputs from each stage
+  intake_analysis   jsonb,  -- output from Intake Analyzer agent
+  research_report   jsonb,  -- output from Business Researcher agent
+  project_plan      text,   -- markdown plan from Plan Builder agent
 
-  -- Research data (JSON — business researcher output)
-  research_data JSONB,
+  -- Deployment
+  github_repo       text,   -- e.g. "Muhabuki003/bookistudio-salon-name"
+  site_url          text,   -- Cloudflare Pages URL
 
-  -- Project plan (markdown)
-  project_plan  TEXT,
+  -- Stripe
+  deposit_session_id    text,
+  deposit_paid_at       timestamptz,
+  remaining_session_id  text,
+  remaining_paid_at     timestamptz,
 
-  -- Site info
-  site_url      TEXT,
-  github_repo   TEXT,
+  -- Pricing (in cents)
+  total_amount    integer,
+  deposit_amount  integer,
 
-  -- Stripe payment IDs
-  deposit_session_id     TEXT,
-  deposit_paid_at        TIMESTAMPTZ,
-  remaining_session_id   TEXT,
-  remaining_paid_at      TIMESTAMPTZ,
-
-  -- Pricing
-  total_amount   INTEGER,  -- in cents
-  deposit_amount INTEGER,  -- in cents
-
-  -- Metadata
-  notes         TEXT,
-  tags          TEXT[] DEFAULT '{}'
+  -- Notes
+  notes           text
 );
 
--- ─── Indexes ────────────────────────────────────────────────────
-CREATE INDEX idx_pipeline_stage ON pipeline_state(stage);
-CREATE INDEX idx_pipeline_client ON pipeline_state(client_id);
-CREATE INDEX idx_pipeline_created ON pipeline_state(created_at DESC);
+-- Indexes
+create index if not exists idx_pipeline_stage on public.pipeline_state(stage);
+create index if not exists idx_pipeline_inquiry on public.pipeline_state(inquiry_id);
 
--- ─── Auto-update updated_at ─────────────────────────────────────
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- Auto-update updated_at
+create or replace function public.update_pipeline_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
 
-CREATE TRIGGER trg_pipeline_updated
-  BEFORE UPDATE ON pipeline_state
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at();
+drop trigger if exists trg_pipeline_updated on public.pipeline_state;
+create trigger trg_pipeline_updated
+  before update on public.pipeline_state
+  for each row
+  execute function public.update_pipeline_updated_at();
 
--- ─── Row Level Security ─────────────────────────────────────────
-ALTER TABLE pipeline_state ENABLE ROW LEVEL SECURITY;
+-- Row Level Security
+alter table public.pipeline_state enable row level security;
 
--- Allow Hermes (via anon key with proper permissions) to read/write
-CREATE POLICY "Allow all for service role"
-  ON pipeline_state
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+-- Allow anonymous inserts (for Hermes API calls)
+drop policy if exists "Allow service insert" on public.pipeline_state;
+create policy "Allow service insert"
+  on public.pipeline_state
+  for insert
+  to anon, authenticated
+  with check (true);
 
--- ─── Notify Hermes on stage changes ────────────────────────────
--- This lets Hermes listen for real-time updates
-CREATE OR REPLACE FUNCTION notify_stage_change()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF OLD.stage IS DISTINCT FROM NEW.stage THEN
-    PERFORM pg_notify(
+-- Only authenticated admins can read/update/delete
+drop policy if exists "Authenticated can read pipeline" on public.pipeline_state;
+create policy "Authenticated can read pipeline"
+  on public.pipeline_state
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated can update pipeline" on public.pipeline_state;
+create policy "Authenticated can update pipeline"
+  on public.pipeline_state
+  for update
+  to authenticated
+  using (true)
+  with check (true);
+
+-- Notify Hermes on stage changes
+create or replace function public.notify_pipeline_stage()
+returns trigger as $$
+begin
+  if old.stage is distinct from new.stage then
+    perform pg_notify(
       'pipeline_stage_change',
       json_build_object(
-        'client_id', NEW.client_id,
-        'business_name', NEW.business_name,
-        'old_stage', OLD.stage,
-        'new_stage', NEW.stage,
-        'updated_at', NEW.updated_at
+        'inquiry_id', new.inquiry_id,
+        'business_name', new.business_name,
+        'old_stage', old.stage,
+        'new_stage', new.stage,
+        'updated_at', new.updated_at
       )::text
     );
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
 
-CREATE TRIGGER trg_pipeline_notify
-  AFTER UPDATE ON pipeline_state
-  FOR EACH ROW
-  EXECUTE FUNCTION notify_stage_change();
+drop trigger if exists trg_pipeline_notify on public.pipeline_state;
+create trigger trg_pipeline_notify
+  after update on public.pipeline_state
+  for each row
+  execute function public.notify_pipeline_stage();
