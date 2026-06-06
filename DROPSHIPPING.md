@@ -146,6 +146,35 @@ ADS_RUNNING → SCALING
 
 ---
 
+## ✅ Files Built
+
+All agent prompts, templates, and API setup guides have been created:
+
+| File | Status |
+|------|--------|
+| `prompts/discovery-agent.md` | ✅ Built |
+| `prompts/sourcing-agent.md` | ✅ Built |
+| `prompts/shopify-agent.md` | ✅ Built |
+| `prompts/brand-agent.md` | ✅ Built |
+| `prompts/content-agent.md` | ✅ Built |
+| `prompts/analytics-agent.md` | ✅ Built |
+| `templates/storefront-template.html` | ✅ Built |
+| `templates/ad-recommendation.md` | ✅ Built |
+| `docs/teamdrop-api.md` | ✅ Built |
+| `docs/shopify-api.md` | ✅ Built |
+| `docs/tiktok-instagram-setup.md` | ✅ Built |
+
+---
+
+## 🔧 Setup Needed (User)
+
+See the following docs for API credentials:
+- `docs/teamdrop-api.md` — TeamDrop API key (products + orders)
+- `docs/shopify-api.md` — Shopify Admin API + Storefront API tokens
+- `docs/tiktok-instagram-setup.md` — TikTok + Instagram Graph API setup
+
+---
+
 ## ⚖️ Content Reposting Note
 
 - Always credit original TikTok creator in caption
