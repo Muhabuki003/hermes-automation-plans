@@ -131,31 +131,41 @@ Hermes reads and writes to this state on every action. Stripe webhooks update `D
 
 ```
 hermes-automation-plans/
-├── README.md                  ← This file (master plan)
-├── prompts/
-│   ├── intake-analyzer.md     ← System prompt for Intake Analyzer agent
-│   ├── business-researcher.md ← System prompt for Business Researcher agent
-│   ├── plan-builder.md        ← System prompt for Plan Builder agent
-│   └── site-builder.md        ← System prompt for Site Builder agent
-├── templates/
-│   ├── intake-form.html       ← Client intake form template
-│   ├── client-agreement.md    ← Client agreement template
-│   ├── email-inquiry-approved.md
-│   ├── email-plan-sent.md
-│   └── email-site-delivered.md
-└── docs/
-    └── stripe-webhook-setup.md ← How to configure Stripe → Cloudflare Worker
+├── BOOKISTUDIO.md             ← Master plan (this file)
+├── DROPSHIPPING.md            ← Dropshipping automation plan
+├── README.md                  ← Repo overview
+├── prompts/                   ← ✅ System prompts for all 4 sub-agents
+│   ├── intake-analyzer.md     ← Intake Analyzer — parses client form → structured JSON
+│   ├── business-researcher.md ← Business Researcher — scrapes online presence, competitors
+│   ├── plan-builder.md        ← Plan Builder — synthesizes research → project plan
+│   └── site-builder.md        ← Site Builder — builds single-file HTML, pushes to GitHub
+├── templates/                 ← ✅ All templates built
+│   ├── intake-form.html       ← Cinematic dark-mode intake form (BOOKISTUDIO branded)
+│   ├── client-agreement.md    ← Service contract with pricing, revisions, IP terms
+│   ├── email-inquiry-approved.md  ← Sent after Am approves the lead
+│   ├── email-plan-sent.md         ← Sent with project plan + agreement + deposit link
+│   └── email-site-delivered.md    ← Sent with live URL + remaining balance link
+└── docs/                      ← ✅ Infrastructure docs & code
+    ├── supabase-schema.sql    ← Full pipeline state table + triggers + RLS + notifications
+    ├── stripe-webhook-worker.js  ← Cloudflare Worker (HMAC-verified Stripe webhook handler)
+    └── stripe-webhook-setup.md   ← Step-by-step: deploy worker, configure Stripe, test
 ```
 
 ---
 
 ## 🚀 Next Steps
 
-- [ ] Set up Supabase pipeline state table
-- [ ] Build Cloudflare Worker for Stripe webhook handler
-- [ ] Write system prompts for each sub-agent (see `/prompts/`)
-- [ ] Build client intake form template
-- [ ] Draft all email templates
+- [x] Write system prompts for each sub-agent (see `/prompts/`)
+- [x] Build client intake form template (`templates/intake-form.html`)
+- [x] Draft all email templates (`templates/email-*.md`)
+- [x] Client agreement template (`templates/client-agreement.md`)
+- [x] Supabase pipeline state schema (`docs/supabase-schema.sql`)
+- [x] Stripe webhook Cloudflare Worker (`docs/stripe-webhook-worker.js`)
+- [x] Stripe webhook setup documentation (`docs/stripe-webhook-setup.md`)
+- [ ] Set up Supabase project — run `docs/supabase-schema.sql` in SQL Editor
+- [ ] Deploy Cloudflare Worker — follow `docs/stripe-webhook-setup.md`
+- [ ] Configure Stripe products & webhook endpoint
+- [ ] Create Hermes cron job / trigger for the pipeline
 - [ ] Give Hermes access to GitHub (Muhabuki003) + Cloudflare
 - [ ] Test full flow end-to-end with a dummy client
 - [ ] Build client portal page (one URL per client, all steps in one place)
