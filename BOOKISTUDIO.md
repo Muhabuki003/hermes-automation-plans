@@ -71,13 +71,15 @@ This repo documents the architecture and implementation plan for automating BOOK
 | Layer | Tool |
 |---|---|
 | AI Orchestrator | Hermes + DeepSeek |
-| Email | founder@bookistudios.com (Microsoft 365 via IMAP/SMTP) |
+| Main Site | [BOOKIWEBSTUDIO](https://github.com/Muhabuki003/BOOKIWEBSTUDIO) (main repo — `index.html` + `intake/` + `assets/`) |
+| Email | founder@bookistudios.com (via Web3Forms API) |
 | Repos | GitHub (Muhabuki003) — one repo per client |
 | Deployment | Cloudflare Pages (auto-deploy on push) |
 | Payments | Stripe (deposit + remainder, webhook triggers) |
-| Pipeline State | Supabase (`nrxbexwzshsnlxyqqgag`) or GitHub Issues |
+| Pipeline State | Supabase (`rrunczvxquobjgeghclh.supabase.co`) — `inquiries` + `sites` tables |
+| Database Schema | `public.inquiries` (contact & intake submissions) + `public.sites` (portfolio entries) + `public.pipeline_state` (stage tracking) |
 | Client Portal | Single-file HTML per client (hosted on Cloudflare Pages) |
-| Style Reference | All past BOOKISTUDIO Cloudflare deployments |
+| Style Reference | [BOOKIWEBSTUDIO](https://github.com/Muhabuki003/BOOKIWEBSTUDIO) `index.html` — the canonical design system |
 
 ---
 
@@ -118,12 +120,21 @@ Hermes reads and writes to this state on every action. Stripe webhooks update `D
 ## 🎨 Site Builder Style Rules
 
 - Always single-file HTML (embedded CSS + JS)
-- Three.js for 3D elements
-- GSAP ScrollTrigger for scroll animations
-- Cinematic, dark, high-impact aesthetic
-- Reference all past deployed sites for brand consistency
+- **BOOKISTUDIO Design System** (from `BOOKIWEBSTUDIO/index.html`):
+  - Colors: `--red: #E8322A`, `--cream: #F2EDE8`, `--black: #080808`, `--surface: #111111`, `--surface-2: #181818`
+  - Fonts: Bebas Neue (headings), Syne (labels/CTAs), DM Sans (body)
+  - Red square logo mark in header
+  - Custom cursor (red dot + ring)
+  - Red accent color throughout
+  - `btn-primary` style: cream background, black text, Syne font, uppercase
+  - `btn-ghost` style: cream text, arrow after
+  - 3D hero section with Three.js
+  - GSAP ScrollTrigger for scroll animations
+  - Cinematic, dark, high-impact aesthetic
+- Reference the `BOOKIWEBSTUDIO` repo `index.html` for the canonical design system
 - **No two sites should look the same** — vary layout, color, motion style per client industry
 - Deploy to Cloudflare Pages via new GitHub repo per client
+- Use CDN-linked Three.js (`r152+`) and GSAP + ScrollTrigger
 
 ---
 
@@ -139,14 +150,14 @@ hermes-automation-plans/
 │   ├── business-researcher.md ← Business Researcher — scrapes online presence, competitors
 │   ├── plan-builder.md        ← Plan Builder — synthesizes research → project plan
 │   └── site-builder.md        ← Site Builder — builds single-file HTML, pushes to GitHub
-├── templates/                 ← ✅ All templates built
-│   ├── intake-form.html       ← Cinematic dark-mode intake form (BOOKISTUDIO branded)
-│   ├── client-agreement.md    ← Service contract with pricing, revisions, IP terms
+├── templates/                 ← ✅ Reference templates (actual form in BOOKIWEBSTUDIO)
+│   ├── intake-form.md         ← Points to real intake form at BOOKIWEBSTUDIO/intake/index.html
+│   ├── client-agreement.md    ← Service contract with pricing, IP terms, revisions
 │   ├── email-inquiry-approved.md  ← Sent after Am approves the lead
 │   ├── email-plan-sent.md         ← Sent with project plan + agreement + deposit link
 │   └── email-site-delivered.md    ← Sent with live URL + remaining balance link
 └── docs/                      ← ✅ Infrastructure docs & code
-    ├── supabase-schema.sql    ← Full pipeline state table + triggers + RLS + notifications
+    ├── supabase-schema.sql    ← Extended schema: pipeline_state table + existing inquiries/sites
     ├── stripe-webhook-worker.js  ← Cloudflare Worker (HMAC-verified Stripe webhook handler)
     └── stripe-webhook-setup.md   ← Step-by-step: deploy worker, configure Stripe, test
 ```
